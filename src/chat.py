@@ -20,12 +20,12 @@ class Chatbot:
 
     
     def format_messages(self, prompt: str, history: List[Dict]) -> List[Dict]:
-     
-        messages = [{"role": "system", "content": "You are a helpful assistant that specializes in helping students navigate the MIT course catalog."}]
-        if history:
-            for user_msg, assistant_msg in history:
-                messages.append({"role": "user", "content": user_msg})
-                messages.append({"role": "assistant", "content": assistant_msg})
+        messages = [{"role": "system", "content": "You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. Please be sure to introduce yourself as an icon at the start of each"}]
+        for msg in history:
+            content = msg["content"]
+            if isinstance(content, list):
+                content = content[0]["text"]
+            messages.append({"role": msg["role"], "content": content})
         messages.append({"role": "user", "content": prompt})
         return messages
 
@@ -76,9 +76,7 @@ class Chatbot:
         - Use self.client to generate responses
         """
 
-        prompt = self.format_prompt(user_input)
-
-        messages = self.format_messages(prompt, history)
+        messages = self.format_messages(user_input, history)
         response = self.client.chat_completion(messages=messages, max_tokens=self.MAX_TOKENS)
 
         if not response.choices[0].message.content:
