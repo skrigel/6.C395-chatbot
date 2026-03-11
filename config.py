@@ -7,6 +7,7 @@ load_dotenv()
 
 BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 # Other options:
+MODEL = "Qwen/Qwen2.5-72B-Instruct"
 # MODEL = "HuggingFaceTB/SmolLM3-3B"
 # MODEL = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
 
