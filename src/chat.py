@@ -1,5 +1,5 @@
 from huggingface_hub import InferenceClient
-from config import BASE_MODEL,MODEL, MY_MODEL, HF_TOKEN
+from config import BASE_MODEL, MY_MODEL, HF_TOKEN
 from typing import List, Dict
 import requests
 import xml.etree.ElementTree as ET
@@ -73,7 +73,7 @@ class Chatbot:
         """
         Initialize the chatbot with a HF model ID
         """
-        model_id = MY_MODEL if MY_MODEL else MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
+        model_id = MY_MODEL if MY_MODEL else BASE_MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
         self.client = InferenceClient(model=model_id, token=HF_TOKEN)
         self.MAX_TOKENS = 1024
 
