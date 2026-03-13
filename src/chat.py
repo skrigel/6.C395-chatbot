@@ -4,9 +4,10 @@ from typing import List, Dict
 import requests
 import xml.etree.ElementTree as ET
 import json
+from .vectorization import PineconeService
 
 CATALOG_URL = "https://catalog.mit.edu/ribbit/index.cgi?page=getcourse.rjs&code="
-
+pinecone_service = PineconeService("mit-courses")
 
 tools = [
     {
@@ -78,8 +79,11 @@ class Chatbot:
         self.MAX_TOKENS = 1024
 
     
-    def format_messages(self, prompt: str, history: List[Dict]) -> List[Dict]:
-        messages = [{"role": "system", "content": "You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. Please be sure to introduce yourself as an icon at the start of each response. When the user asks about a specific course, you MUST use the get_course tool to fetch accurate information. Do not make up or guess course details."}]
+    def format_messages(self, prompt: str, history: List[Dict], rag_context: str = "") -> List[Dict]:
+        system_content = "You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. Please be sure to introduce yourself as an icon at the start of each response. When the user asks about a specific course, you MUST use the get_course tool to fetch accurate information. Do not make up or guess course details."
+        if rag_context:
+            system_content += f"\n\nRelevant courses from the MIT catalog that may help answer the user's question:\n{rag_context}"
+        messages = [{"role": "system", "content": system_content}]
         for msg in history:
             content = msg["content"]
             if isinstance(content, list):
@@ -135,7 +139,14 @@ class Chatbot:
         - Use self.client to generate responses
         """
 
+        rag_results = pinecone_service.query(query_text=user_input, top_k=5, namespace="s25")
+        rag_context = "\n".join(
+            f"- {r['course_number']}: {r['name']} ({r['units']} units) — {r['description']}"
+            for r in rag_results
+        )
+
         messages = self.format_messages(user_input, history)
+        messages.append({'role':'system', 'content': f"Here is context from the users query \n{rag_context}"})
         response = self.client.chat_completion(messages=messages, max_tokens=self.MAX_TOKENS,tools=tools,tool_choice='auto')  # type: ignore
         response_message = response.choices[0].message
 

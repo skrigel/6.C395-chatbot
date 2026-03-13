@@ -70,6 +70,18 @@ class PineconeService:
                 namespace=namespace,
             )
 
+    def get_course_by_id(self, course_number: str, namespace: str) -> Dict | None:
+        result = cast(QueryResponse, self.index.query(
+            id=f"{course_number}_{namespace}",
+            namespace=namespace,
+            top_k=1,
+            include_values=False,
+            include_metadata=True,
+        ))
+        if result.matches:
+            return dict(result.matches[0].metadata)
+        return None
+
     def query(self, query_text: str, top_k: int = 5, namespace: str | None = None) -> List[Dict]:
         vector = embeddings.embed_query(query_text)
         results = cast(QueryResponse, self.index.query(
