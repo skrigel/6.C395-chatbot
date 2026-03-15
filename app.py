@@ -68,9 +68,11 @@ def create_chatbot():
     demo = gr.ChatInterface(
         chat,
         title="The (Course) Planner of Beaverton",
-        description="Ask me anything about the MIT course catalog! Since I am a free tier chatbot, I may give a 503 error when I'm busy. If that happens, please try again a few seconds later.",
+        description="Ask me anything about the MIT course catalog! Since I am a free tier chatbot, I may give a 503 error when I'm busy. If that happens, please try again a few seconds later. (Art credit: Margaret Zheng)",
         examples=[
-            "What are some easy and introductory HASS classes to take?"
+            "What are some easy and introductory HASS classes to take?",
+            "What are some advanced classes in course 22?",
+            "Can you suggest a schedule for this spring without any classes before 11 AM?"
         ]
     )
     
@@ -88,7 +90,6 @@ def get_style():
           background-position: center;
           background-size: cover
         } """
-        #  background: url(https://lh3.googleusercontent.com/sitesv/APaQ0ST0JCaLD57Gl1edOzxU3T7dkpirTFtejfF3ZIVDePCJTtdDCYs4aeiceCREGgZtAps_OEqLHTI0wDTX6oz51gXmwKzQl9EjJGWBRvFjxN625v9lW4pVl41DZ2PCnb_oZipaTc9bwncegW9EOrDYY5iO_bCuck4xlWAT2KBUBzUgxsN3hRGLJufvyVw=w16383);
     return theme, css
 
 if __name__ == "__main__":
