@@ -1,5 +1,10 @@
 from huggingface_hub import InferenceClient
 from config import BASE_MODEL, MY_MODEL, HF_TOKEN
+from typing import List, Dict
+import requests
+import xml.etree.ElementTree as ET
+import json
+from .vectorization import PineconeService
 
 with open("data/s25_names.txt") as f:
     SPRING_CLASSES = f.read()

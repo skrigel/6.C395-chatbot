@@ -81,6 +81,41 @@ class PineconeService:
         if result.matches:
             return dict(result.matches[0].metadata)
         return None
+    
+    def query_and_filter(self, query_text: str, filter: dict | None, top_k: int = 5, namespace: str | None = None) -> List[Dict]:
+        vector = embeddings.embed_query(query_text)
+
+        if filter:
+            results = cast(QueryResponse, self.index.query(
+                vector=vector,
+                top_k=top_k,
+                include_metadata=True,
+                filter=filter,
+                namespace=namespace,
+            ))
+        else:
+            results = cast(QueryResponse, self.index.query(
+                vector=vector,
+                top_k=top_k,
+                include_metadata=True,
+                namespace=namespace,
+            ))
+
+        return [
+            {
+                "course_number": match.metadata.get("course_number"),
+                "name": match.metadata.get("name"),
+                "term": match.metadata.get("term"),
+                "description": match.metadata.get("description"),
+                "hours": match.metadata.get("hours"),
+                "prereqs": match.metadata.get("prereqs"),
+                "units": match.metadata.get("units"),
+                "hass":match.metadata.get("hass"),
+                "level": match.metadata.get("level"),
+                "score": match.score,
+            }
+            for match in results.matches
+        ]
 
     def query(self, query_text: str, top_k: int = 5, namespace: str | None = None) -> List[Dict]:
         vector = embeddings.embed_query(query_text)
@@ -97,12 +132,16 @@ class PineconeService:
                 "name": match.metadata.get("name"),
                 "term": match.metadata.get("term"),
                 "description": match.metadata.get("description"),
+                "hours": match.metadata.get("hours"),
                 "prereqs": match.metadata.get("prereqs"),
                 "units": match.metadata.get("units"),
+                "hass":match.metadata.get("hass"),
+                "level": match.metadata.get("level"),
                 "score": match.score,
             }
             for match in results.matches
         ]
+    
     def vectorize_term_json(self, json_data: Dict):
         term = json_data.get('termInfo', {}).get('urlName', 'unknown')
         classes = json_data.get('classes', {})
@@ -150,6 +189,7 @@ class PineconeService:
 
 
     def _class_to_text(self, class_data: Dict) -> str:
+        print(class_data)
         parts = []
         if class_data.get('number') and class_data.get('name'):
             parts.append(f"Course: {class_data['number']} - {class_data['name']}")
