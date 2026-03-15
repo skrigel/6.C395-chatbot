@@ -83,10 +83,12 @@ def get_style():
         neutral_hue="zinc"
     )
     css = """.bubble-wrap.svelte-kpz1
-        { background: url(https://lh3.googleusercontent.com/sitesv/APaQ0ST0JCaLD57Gl1edOzxU3T7dkpirTFtejfF3ZIVDePCJTtdDCYs4aeiceCREGgZtAps_OEqLHTI0wDTX6oz51gXmwKzQl9EjJGWBRvFjxN625v9lW4pVl41DZ2PCnb_oZipaTc9bwncegW9EOrDYY5iO_bCuck4xlWAT2KBUBzUgxsN3hRGLJufvyVw=w16383);
+        { 
+          background: url(https://i.pinimg.com/736x/6a/70/3a/6a703a8f55e50523d98cd1ac88dba19a.jpg);
           background-position: center;
           background-size: cover
         } """
+        #  background: url(https://lh3.googleusercontent.com/sitesv/APaQ0ST0JCaLD57Gl1edOzxU3T7dkpirTFtejfF3ZIVDePCJTtdDCYs4aeiceCREGgZtAps_OEqLHTI0wDTX6oz51gXmwKzQl9EjJGWBRvFjxN625v9lW4pVl41DZ2PCnb_oZipaTc9bwncegW9EOrDYY5iO_bCuck4xlWAT2KBUBzUgxsN3hRGLJufvyVw=w16383);
     return theme, css
 
 if __name__ == "__main__":
