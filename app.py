@@ -67,34 +67,23 @@ def create_chatbot():
     # Create Gradio interface. Customize the interface however you'd like!
     demo = gr.ChatInterface(
         chat,
-        title="The Planner of Beaverton",
+        title="The (Course) Planner of Beaverton",
         description="Ask me anything about the MIT course catalog! Since I am a free tier chatbot, I may give a 503 error when I'm busy. If that happens, please try again a few seconds later.",
         examples=[
             "What are some easy and introductory HASS classes to take?"
-        ],
-        cache_examples=True
+        ]
     )
     
     return demo
 
 def get_style():
     theme = gr.themes.Soft(
-        primary_hue=colors.Color(
-            name="mit_red",
-            c50="#ffe6ea", 
-            c100="#ffccd5", 
-            c200="#ff99aa",
-            c300="#ff6680",
-            c400="#ff3355",
-            c500="#750014",
-            c600="#e60026",
-            c700="#cc0022",
-            c800="#b3001e",
-            c900="#99001a",
-            c950="#750014")
+        primary_hue="emerald",
+        secondary_hue="sky",
+        neutral_hue="zinc"
     )
     css = """.bubble-wrap.svelte-kpz1
-        { background: url(https://brand.mit.edu/sites/default/files/styles/tile_narrow/public/2023-08/tim-full-body-three-quarter-view.png?itok=iWI5CwQI);
+        { background: url(https://lh3.googleusercontent.com/sitesv/APaQ0ST0JCaLD57Gl1edOzxU3T7dkpirTFtejfF3ZIVDePCJTtdDCYs4aeiceCREGgZtAps_OEqLHTI0wDTX6oz51gXmwKzQl9EjJGWBRvFjxN625v9lW4pVl41DZ2PCnb_oZipaTc9bwncegW9EOrDYY5iO_bCuck4xlWAT2KBUBzUgxsN3hRGLJufvyVw=w16383);
           background-position: center
         } """
     return theme, css
