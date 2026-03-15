@@ -10,6 +10,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 # with open("data/s25_names.txt") as f:
 #     SPRING_CLASSES = f.read()
 
+N_RAG_CHUNKS=10
+
 with open("src/system_prompt_rag.txt") as f:
     SYSTEM_PROMPT = f.read() #+ SPRING_CLASSES
 
@@ -118,7 +120,7 @@ class Chatbot:
 
         rag_results = pinecone_service.query_and_filter(query_text=user_input
                                                         , filter=user_query_filters if user_query_filters else None
-                                                        , top_k=10, namespace='course-catalog')
+                                                        , top_k=N_RAG_CHUNKS, namespace='course-catalog')
         print(rag_results)
         rag_context = "\n".join(
             f"- {r['Class Number']} {r['Class Name']}: {r['Class Description']}"
@@ -127,7 +129,7 @@ class Chatbot:
 
         messages = self.format_prompt(user_input, history)
         messages.append({'role':'system'
-                         , 'content': f"Here is a list of class numbers, names, and descriptions for five classes that may be relevant to the user's query: \n{rag_context}. If a user is asking for class recommendations, you may want to focus on these results."})
+                         , 'content': f"Here is a list of class numbers, names, and descriptions for {N_RAG_CHUNKS} classes that may be relevant to the user's query: \n{rag_context}. If a user is asking for class recommendations, you may want to focus on these results."})
 
         response = self.client.chat_completion(messages=messages, max_tokens=1024)
         if not response.choices[0].message.content:
