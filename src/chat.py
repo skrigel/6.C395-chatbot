@@ -4,10 +4,26 @@ from typing import List, Dict
 import requests
 import xml.etree.ElementTree as ET
 import json
-from .vectorization import PineconeService
+from .vectorization import PineconeService, embeddings
+from sklearn.metrics.pairwise import cosine_similarity
 
 CATALOG_URL = "https://catalog.mit.edu/ribbit/index.cgi?page=getcourse.rjs&code="
 pinecone_service = PineconeService("mit-courses")
+
+SYSTEM_CONTENT = """
+You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. 
+Please be sure to introduce yourself as an icon at the start of your response to the first question asked. Do not re-introduce yourself again during the same conversation.
+
+During your conversation, abide by the following terminology: 
+- Course number: The number used to identify a course (e.g. 6). The course number is an integer and corresponds to a major. 
+- Class number: The number used to identify a class (e.g. 6.1010). The class number is formatted as an integer, which represents the course number that it belongs to, followed by a dot, and then another integer. 
+
+Abide by the following guidelines when generating responses: 
+- Follow the terminology defined in the previous section.
+- When the user asks about a specific class, you MUST use the get_course tool to fetch accurate information.
+- Never explicitly mention the get_course tool in your response. Instead, seamlessly integrate any information retrieved by it into your response. 
+Do not make up or guess course details.
+"""
 
 tools = [
     {
@@ -18,19 +34,19 @@ tools = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "course_number": {
+                    "class_number": {
                         "type": "string", 
                         "description": "Number used to identify class (ie 6.1010)"
                     },
                 },
-                "required": ["course_number"],
+                "required": ["class_number"],
             },
         },
     },
 ]
 
-def get_course(course_number):
-    url = CATALOG_URL + course_number
+def get_course(class_number):
+    url = CATALOG_URL + class_number
     r = requests.get(url)
 
     outer = ET.fromstring(r.text)
@@ -38,7 +54,7 @@ def get_course(course_number):
     # The catalog wraps HTML in CDATA inside a <course> element
     course_elem = outer.find(".//course")
     if course_elem is None or not course_elem.text:
-        return {"course": course_number, "error": "Course not found"}
+        return {"class": class_number, "error": "Course not found"}
 
     # Re-parse the inner HTML as XML
     inner = ET.fromstring(f"<root>{course_elem.text}</root>")
@@ -55,7 +71,7 @@ def get_course(course_number):
                 prereqs.append(a.text.strip())
 
     return {
-        "course": course_number,
+        "class": class_number,
         "title": title,
         "description": desc,
         "prereqs": prereqs
@@ -80,7 +96,7 @@ class Chatbot:
 
     
     def format_messages(self, prompt: str, history: List[Dict], rag_context: str = "") -> List[Dict]:
-        system_content = "You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. Please be sure to introduce yourself as an icon at the start of each response. When the user asks about a specific course, you MUST use the get_course tool to fetch accurate information. Do not make up or guess course details."
+        system_content = SYSTEM_CONTENT
         if rag_context:
             system_content += f"\n\nRelevant courses from the MIT catalog that may help answer the user's question:\n{rag_context}"
         messages = [{"role": "system", "content": system_content}]
@@ -138,17 +154,45 @@ class Chatbot:
         - Use self.format_prompt() to format the user's input
         - Use self.client to generate responses
         """
+        
+        user_embedding = embeddings.embed_query(user_input)
+        user_query_filters = {}
 
-        rag_results = pinecone_service.query(query_text=user_input, top_k=5, namespace="s25")
+        reference_embedding = embeddings.embed_query("is a HASS-H")
+        similarity = cosine_similarity([user_embedding], [reference_embedding])[0][0]
+        print(similarity)
+        if similarity > 0.8:
+            user_query_filters["name"] = {"$eq": "Introduction to Ancient and Medieval Studies"}
+        
+        print("RAG results:")
+        rag_results = pinecone_service.query_and_filter(query_text=user_input, filter=user_query_filters, top_k=5, namespace="s25")
+        print(rag_results)
+
+        # rag_results = pinecone_service.query(query_text=user_input, top_k=5, namespace="s25")
         rag_context = "\n".join(
             f"- {r['course_number']}: {r['name']} ({r['units']} units) — {r['description']}"
             for r in rag_results
         )
+        print(rag_context)
 
         messages = self.format_messages(user_input, history)
         messages.append({'role':'system', 'content': f"Here is context from the users query \n{rag_context}"})
         response = self.client.chat_completion(messages=messages, max_tokens=self.MAX_TOKENS,tools=tools,tool_choice='auto')  # type: ignore
         response_message = response.choices[0].message
+
+        print("message")
+        print(response_message)
+
+        print("\n--- Tool Usage Info ---")
+        if response_message.tool_calls:
+            print(f"✓ Tool(s) called: {len(response_message.tool_calls)}")
+            for i, tool_call in enumerate(response_message.tool_calls, 1):
+                print(f"  [{i}] Function: {tool_call.function.name}")
+                print(f"      Arguments: {tool_call.function.arguments}")
+        else:
+            print("✗ No tools called (text-only response)")
+        print("----------------------\n")
+    
 
         # Check if model wants to call functions
         if response_message.tool_calls:
@@ -159,9 +203,9 @@ class Chatbot:
                 function_args = json.loads(tool_call.function.arguments)
 
                 if function_name == "get_course":
-                    result = get_course(function_args["course_number"])
+                    result = get_course(function_args["class_number"])
 
-                    print("tool call result ", result)
+                    # print("tool call result ", result)
                     
                     messages.append({
                         "tool_call_id": tool_call.id,
