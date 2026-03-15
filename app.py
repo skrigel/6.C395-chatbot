@@ -19,6 +19,7 @@ Example Usage:
 """
 
 import gradio as gr
+from gradio.themes.utils import colors
 from src.chat import Chatbot
 
 def create_chatbot():
@@ -59,8 +60,6 @@ def create_chatbot():
                 - Generate an appropriate response to the current message
                 - Return that response as a string
         """
-        # TODO: Generate and return response
-        print(history)
         return chatbot.get_response(message, history)
 
     
@@ -68,15 +67,39 @@ def create_chatbot():
     # Create Gradio interface. Customize the interface however you'd like!
     demo = gr.ChatInterface(
         chat,
-        title="6.C395",
+        title="The Planner of Beaverton",
         description="Ask me anything about the MIT course catalog! Since I am a free tier chatbot, I may give a 503 error when I'm busy. If that happens, please try again a few seconds later.",
         examples=[
-            "What options are available for someone in my situation?"
-        ]
+            "What are some easy and introductory HASS classes to take?"
+        ],
+        cache_examples=True
     )
     
     return demo
 
+def get_style():
+    theme = gr.themes.Soft(
+        primary_hue=colors.Color(
+            name="mit_red",
+            c50="#ffe6ea", 
+            c100="#ffccd5", 
+            c200="#ff99aa",
+            c300="#ff6680",
+            c400="#ff3355",
+            c500="#750014",
+            c600="#e60026",
+            c700="#cc0022",
+            c800="#b3001e",
+            c900="#99001a",
+            c950="#750014")
+    )
+    css = """.bubble-wrap.svelte-kpz1
+        { background: url(https://brand.mit.edu/sites/default/files/styles/tile_narrow/public/2023-08/tim-full-body-three-quarter-view.png?itok=iWI5CwQI);
+          background-position: center
+        } """
+    return theme, css
+
 if __name__ == "__main__":
     demo = create_chatbot()
-    demo.launch()
+    theme, css = get_style()
+    demo.launch(theme=theme, css=css)
