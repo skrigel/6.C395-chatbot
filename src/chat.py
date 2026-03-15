@@ -4,13 +4,16 @@ from typing import List, Dict
 import requests
 import xml.etree.ElementTree as ET
 import json
-from .vectorization import PineconeService
+from .rag_chunking import PineconeService, embeddings
+from sklearn.metrics.pairwise import cosine_similarity
 
 with open("data/s25_names.txt") as f:
     SPRING_CLASSES = f.read()
 
 with open("src/system_prompt.txt") as f:
     SYSTEM_PROMPT = f.read() + SPRING_CLASSES
+
+pinecone_service = PineconeService('class-catalog-full')
 
 class Chatbot:
     """
@@ -27,6 +30,7 @@ class Chatbot:
         """
         model_id = MY_MODEL if MY_MODEL else BASE_MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
         self.client = InferenceClient(model=model_id, token=HF_TOKEN)
+
         
     def format_prompt(self, user_input, history=[]):
         """
@@ -57,7 +61,37 @@ class Chatbot:
         messages.append({"role": "user", "content": user_input})
         return messages
 
+    
+    def check_for_filters(self, user_embedding):
+        user_query_filters = {}
+
+        filters = [('is a HASS-H', 'Class HASS Categories Satisfied', '$eq', 'H'),
+                    ('is a HASS-S', 'Class HASS Categories Satisfied', '$eq', 'S'),
+                    ('is a HASS-A', 'Class HASS Categories Satisfied', '$eq', 'A'),
+                    ('is a CI-H', 'Class CI-H Status', '$eq', 'CI-H'),
+                    ('is a CI-M', 'Class CI-M Status', '$eq', 'CI-M'),
+                    ('is a GIR', 'Class GIR Categories Satisfied', '$in', ['PHY1', 'PHY2', 'BIO', 'CHEM', 'CAL1', 'CAL2']),
+                    ('is offered in the fall term', 'Terms Offered', '$in', ['FA', "['FA', 'SP']", "['SP', 'FA']"]),
+                    ('is offered in the spring term', 'Terms Offered', '$in', ['SP', "['FA', 'SP']", "['SP', 'FA']"]),
+                    ('has a final', 'Class Has Final', '$eq', 'True')
+                    ]
         
+        similarities = []
+        
+        for i, (filter_phrase, filter_subject, filter_operator, filter_value) in enumerate(filters):
+            filter_embedding = embeddings.embed_query(filter_phrase)
+            similarities.append(cosine_similarity([user_embedding], [filter_embedding])[0][0])
+
+        print(similarities)
+        max_value = max(similarities) 
+        max_index = similarities.index(max_value) 
+
+        if max_value > 0.8:
+            user_query_filters[filters[max_index][1]] = {filters[max_index][2]: filters[max_index][3]}
+
+        return user_query_filters
+        
+
     def get_response(self, user_input, history=[]):
         """
         TODO: Implement this method to generate responses to user questions.
@@ -77,8 +111,24 @@ class Chatbot:
         - Use self.format_prompt() to format the user's input
         - Use self.client to generate responses
         """
+
+        user_embedding = embeddings.embed_query(user_input)
+        user_query_filters = self.check_for_filters(user_embedding)
+
+        rag_results = pinecone_service.query_and_filter(query_text=user_input
+                                                        , filter=user_query_filters if user_query_filters else None
+                                                        , top_k=5, namespace='course-catalog')
+        print(rag_results)
+        rag_context = "\n".join(
+            f"- {r['Class Number']} {r['Class Name']}: {r['Class Description']}"
+            for r in rag_results
+        )
+
         messages = self.format_prompt(user_input, history)
-        response = self.client.chat_completion(messages=messages)
+        messages.append({'role':'system'
+                         , 'content': f"Here is a list of class numbers, names, and descriptions for five classes that may be relevant to the user's query: \n{rag_context}. These classes can be incorporated into your response as you see fit."})
+
+        response = self.client.chat_completion(messages=messages, max_tokens=1024)
         if not response.choices[0].message.content:
             return "Sorry! Please try again :("
         return response.choices[0].message.content

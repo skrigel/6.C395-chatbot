@@ -5,7 +5,7 @@ import glob
 import time
 from dotenv import load_dotenv
 from langchain_pinecone import PineconeEmbeddings
-from pinecone import Pinecone, ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec, Vector
 from pinecone.core.openapi.db_data.model.query_response import QueryResponse
 
 load_dotenv()
@@ -57,12 +57,11 @@ class PineconeService:
 
             records = []
             for course_number, metadata, vector in zip(batch_numbers, batch_dicts, vectors):
-                records.append({
-                    "id": f"{course_number}",
-                    "values": vector,
-                    "namespace": 'course-catalog',
-                    "metadata": metadata,
-                })
+                records.append(Vector(
+                    id=f"{course_number}",
+                    values=vector,
+                    metadata=metadata,
+                ))
 
             self.upsert_batch(records)
             print(f"Upserted {min(i + batch_size, total)}/{total} courses")
@@ -74,11 +73,7 @@ class PineconeService:
             return 
         for i in range(0, len(records), 100):
             chunk = records[i:i + 100]
-            namespace = chunk[0].get('namespace', '')
-            self.index.upsert(
-                vectors=[{k: v for k, v in r.items() if k != 'namespace'} for r in chunk], # type: ignore
-                namespace=namespace,
-            )
+            self.index.upsert(namespace='course-catalog', vectors=chunk)
 
     def query_and_filter(self, query_text: str, filter: dict | None, top_k: int = 5, namespace: str | None = None) -> List[Dict]:
         vector = embeddings.embed_query(query_text)
