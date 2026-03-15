@@ -1,65 +1,11 @@
 from huggingface_hub import InferenceClient
 from config import BASE_MODEL, MY_MODEL, HF_TOKEN
-from typing import List, Dict
-import requests
-import xml.etree.ElementTree as ET
-import json
-from .vectorization import PineconeService
 
-CATALOG_URL = "https://catalog.mit.edu/ribbit/index.cgi?page=getcourse.rjs&code="
-pinecone_service = PineconeService("mit-courses")
+with open("data/s25_names.txt") as f:
+    SPRING_CLASSES = f.read()
 
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_course",
-            "description": "Fetch information about a particular course from the MIT course catalog",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "course_number": {
-                        "type": "string", 
-                        "description": "Number used to identify class (ie 6.1010)"
-                    },
-                },
-                "required": ["course_number"],
-            },
-        },
-    },
-]
-
-def get_course(course_number):
-    url = CATALOG_URL + course_number
-    r = requests.get(url)
-
-    outer = ET.fromstring(r.text)
-
-    # The catalog wraps HTML in CDATA inside a <course> element
-    course_elem = outer.find(".//course")
-    if course_elem is None or not course_elem.text:
-        return {"course": course_number, "error": "Course not found"}
-
-    # Re-parse the inner HTML as XML
-    inner = ET.fromstring(f"<root>{course_elem.text}</root>")
-
-    title = inner.findtext(".//p[@class='courseblocktitle']")
-    desc = inner.findtext(".//p[@class='courseblockdesc']")
-
-    prereqs: List[str] = []
-    prereq_elem = inner.find(".//span[@class='courseblockprereq']")
-
-    if prereq_elem is not None:
-        for a in prereq_elem.findall(".//a"):
-            if a.text:
-                prereqs.append(a.text.strip())
-
-    return {
-        "course": course_number,
-        "title": title,
-        "description": desc,
-        "prereqs": prereqs
-    }
+with open("src/system_prompt.txt") as f:
+    SYSTEM_PROMPT = f.read() + SPRING_CLASSES
 
 class Chatbot:
     """
@@ -76,23 +22,8 @@ class Chatbot:
         """
         model_id = MY_MODEL if MY_MODEL else BASE_MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
         self.client = InferenceClient(model=model_id, token=HF_TOKEN)
-        self.MAX_TOKENS = 1024
-
-    
-    def format_messages(self, prompt: str, history: List[Dict], rag_context: str = "") -> List[Dict]:
-        system_content = "You are a helpful assistant named Sendhil that specializes in helping students navigate the MIT course catalog. Please be sure to introduce yourself as an icon at the start of each response. When the user asks about a specific course, you MUST use the get_course tool to fetch accurate information. Do not make up or guess course details."
-        if rag_context:
-            system_content += f"\n\nRelevant courses from the MIT catalog that may help answer the user's question:\n{rag_context}"
-        messages = [{"role": "system", "content": system_content}]
-        for msg in history:
-            content = msg["content"]
-            if isinstance(content, list):
-                content = content[0]["text"]
-            messages.append({"role": msg["role"], "content": content})
-        messages.append({"role": "user", "content": prompt})
-        return messages
-
-    def format_prompt(self, user_input: str)->str:
+        
+    def format_prompt(self, user_input, history=[]):
         """
         TODO: Implement this method to format the user's input into a proper prompt.
         
@@ -111,15 +42,18 @@ class Chatbot:
             "You are a helpful assistant that specializes in...
              User: {user_input}
              Assistant:"
+        """
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for msg in history:
+            content = msg["content"]
+            if isinstance(content, list):
+                content = content[0]["text"]
+            messages.append({"role": msg["role"], "content": content})
+        messages.append({"role": "user", "content": user_input})
+        return messages
 
-        """
- 
-        placeholder_prompt = f"""
-        User: {user_input}
-        """
-        return placeholder_prompt
         
-    def get_response(self, user_input, history=[])->str:
+    def get_response(self, user_input, history=[]):
         """
         TODO: Implement this method to generate responses to user questions.
         
@@ -138,45 +72,8 @@ class Chatbot:
         - Use self.format_prompt() to format the user's input
         - Use self.client to generate responses
         """
-
-        rag_results = pinecone_service.query(query_text=user_input, top_k=5, namespace="s25")
-        rag_context = "\n".join(
-            f"- {r['course_number']}: {r['name']} ({r['units']} units) — {r['description']}"
-            for r in rag_results
-        )
-
-        messages = self.format_messages(user_input, history)
-        messages.append({'role':'system', 'content': f"Here is context from the users query \n{rag_context}"})
-        response = self.client.chat_completion(messages=messages, max_tokens=self.MAX_TOKENS,tools=tools,tool_choice='auto')  # type: ignore
-        response_message = response.choices[0].message
-
-        # Check if model wants to call functions
-        if response_message.tool_calls:
-            messages.append(response_message)
-
-            for tool_call in response_message.tool_calls:
-                function_name = tool_call.function.name
-                function_args = json.loads(tool_call.function.arguments)
-
-                if function_name == "get_course":
-                    result = get_course(function_args["course_number"])
-
-                    print("tool call result ", result)
-                    
-                    messages.append({
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": json.dumps(result),
-                    })
-
-            # Get final response with function results
-            final_response = self.client.chat_completion(
-                messages=messages, max_tokens=self.MAX_TOKENS
-            )
-
-            message_content = final_response.choices[0].message.content 
-            return message_content if message_content else "Sorry!"
-        else:
-            
-            return response_message.content if response_message.content else "Sorry!"
+        messages = self.format_prompt(user_input, history)
+        response = self.client.chat_completion(messages=messages)
+        if not response.choices[0].message.content:
+            return "Sorry! Please try again :("
+        return response.choices[0].message.content
