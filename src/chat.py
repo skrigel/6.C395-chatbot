@@ -1,11 +1,22 @@
+import chromadb
+import json
 from huggingface_hub import InferenceClient
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 from config import BASE_MODEL, MY_MODEL, HF_TOKEN
 
+""" PROMPT ENGINEERING ONLY
 with open("data/s25_names.txt") as f:
     SPRING_CLASSES = f.read()
 
 with open("src/system_prompt.txt") as f:
     SYSTEM_PROMPT = f.read() + SPRING_CLASSES
+"""
+
+with open("src/system_prompt_rag.txt") as f:
+    SYSTEM_PROMPT = f.read()
+
+NUM_RAG_CHUNKS = 10
+MAX_TOKENS = 1024
 
 class Chatbot:
     """
@@ -22,7 +33,23 @@ class Chatbot:
         """
         model_id = MY_MODEL if MY_MODEL else BASE_MODEL # define MY_MODEL in config.py if you create a new model in the HuggingFace Hub
         self.client = InferenceClient(model=model_id, token=HF_TOKEN)
-        
+        self.db = self.build_chroma_db()
+        print("chatbot and database initialized")
+
+    def build_chroma_db(self):
+        chroma_client = chromadb.Client()
+        embedding_func = DefaultEmbeddingFunction()
+        catalog_collection = chroma_client.create_collection(name="catalog")
+        with open("data/combined_catalog_doc.json", "r") as f:
+            data = json.load(f)
+
+            ids = [number for number in data.keys()]
+            documents = [subject["document"] for subject in data.values()]
+            embeddings = embedding_func([subject["document"] for subject in data.values()])
+            metadata = [subject for subject in data.values()]
+            catalog_collection.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadata)
+            return catalog_collection
+
     def format_prompt(self, user_input, history=[]):
         """
         TODO: Implement this method to format the user's input into a proper prompt.
@@ -43,7 +70,15 @@ class Chatbot:
              User: {user_input}
              Assistant:"
         """
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        rag_results = self.db.query(
+            query_texts = [user_input],
+            n_results = NUM_RAG_CHUNKS
+        )
+        print("query returned", rag_results["ids"])
+        system_content = f"""{SYSTEM_PROMPT}. Here is information about {NUM_RAG_CHUNKS} classes relevant to the user's request: {str(rag_results)}.
+                             These classes can be incorporated into your response as you see fit. Do not include any classes not from this list. 
+                          """
+        messages = [{"role": "system", "content": system_content}]
         for msg in history:
             content = msg["content"]
             if isinstance(content, list):
@@ -73,7 +108,7 @@ class Chatbot:
         - Use self.client to generate responses
         """
         messages = self.format_prompt(user_input, history)
-        response = self.client.chat_completion(messages=messages)
+        response = self.client.chat_completion(messages=messages, max_tokens=MAX_TOKENS)
         if not response.choices[0].message.content:
             return "Sorry! Please try again :("
         return response.choices[0].message.content
