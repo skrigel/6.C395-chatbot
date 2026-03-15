@@ -7,11 +7,11 @@ import json
 from .rag_chunking import PineconeService, embeddings
 from sklearn.metrics.pairwise import cosine_similarity
 
-with open("data/s25_names.txt") as f:
-    SPRING_CLASSES = f.read()
+# with open("data/s25_names.txt") as f:
+#     SPRING_CLASSES = f.read()
 
-with open("src/system_prompt.txt") as f:
-    SYSTEM_PROMPT = f.read() + SPRING_CLASSES
+with open("src/system_prompt_rag.txt") as f:
+    SYSTEM_PROMPT = f.read() #+ SPRING_CLASSES
 
 pinecone_service = PineconeService('class-catalog-full')
 
@@ -65,15 +65,16 @@ class Chatbot:
     def check_for_filters(self, user_embedding):
         user_query_filters = {}
 
-        filters = [('is a HASS-H', 'Class HASS Categories Satisfied', '$eq', 'H'),
-                    ('is a HASS-S', 'Class HASS Categories Satisfied', '$eq', 'S'),
-                    ('is a HASS-A', 'Class HASS Categories Satisfied', '$eq', 'A'),
-                    ('is a CI-H', 'Class CI-H Status', '$eq', 'CI-H'),
-                    ('is a CI-M', 'Class CI-M Status', '$eq', 'CI-M'),
-                    ('is a GIR', 'Class GIR Categories Satisfied', '$in', ['PHY1', 'PHY2', 'BIO', 'CHEM', 'CAL1', 'CAL2']),
-                    ('is offered in the fall term', 'Terms Offered', '$in', ['FA', "['FA', 'SP']", "['SP', 'FA']"]),
-                    ('is offered in the spring term', 'Terms Offered', '$in', ['SP', "['FA', 'SP']", "['SP', 'FA']"]),
-                    ('has a final', 'Class Has Final', '$eq', 'True')
+        filters = [('is a HASS-H', 'Class HASS Categories Satisfied', '$eq',  "('', 'H')"),
+                    ('is a HASS-S', 'Class HASS Categories Satisfied', '$eq',  "('', 'S')"),
+                    ('is a HASS-A', 'Class HASS Categories Satisfied', '$eq',  "('', 'A')"),
+                    ('is a CI-H', 'Class CI-H Status', '$eq', "('', 'C, I, -, H')"),
+                    ('is a CI-HW', 'Class CI-HW Status', '$eq', "('', 'C, I, -, H, W')"),
+                    ('is a GIR', 'Class GIR Categories Satisfied', '$in', ["('', 'P, H, Y, 1')", "('', 'P, H, Y, 2')", "('', 'B, I, O, L')", "('', 'C, H, E, M')", "('', 'C, A, L, 1')", "('', 'C, A, L, 2')"]),
+                    ('is offered in the fall term', 'Terms Offered', '$in', ['FA', 'FA, SP', 'SP, FA']),
+                    ('is offered in the spring term', 'Terms Offered', '$in', ['SP', 'FA, SP', 'SP, FA']),
+                    ('has a final', 'Class Has Final', '$eq', 'True'),
+                    ('does not have a final', 'Class Has Final', '$eq', 'False')
                     ]
         
         similarities = []
@@ -117,7 +118,7 @@ class Chatbot:
 
         rag_results = pinecone_service.query_and_filter(query_text=user_input
                                                         , filter=user_query_filters if user_query_filters else None
-                                                        , top_k=5, namespace='course-catalog')
+                                                        , top_k=10, namespace='course-catalog')
         print(rag_results)
         rag_context = "\n".join(
             f"- {r['Class Number']} {r['Class Name']}: {r['Class Description']}"
@@ -126,7 +127,7 @@ class Chatbot:
 
         messages = self.format_prompt(user_input, history)
         messages.append({'role':'system'
-                         , 'content': f"Here is a list of class numbers, names, and descriptions for five classes that may be relevant to the user's query: \n{rag_context}. These classes can be incorporated into your response as you see fit."})
+                         , 'content': f"Here is a list of class numbers, names, and descriptions for five classes that may be relevant to the user's query: \n{rag_context}. If a user is asking for class recommendations, you may want to focus on these results."})
 
         response = self.client.chat_completion(messages=messages, max_tokens=1024)
         if not response.choices[0].message.content:
