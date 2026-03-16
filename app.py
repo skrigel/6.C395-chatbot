@@ -25,6 +25,21 @@ def create_chatbot():
 
     return demo
 
+def get_style():
+    theme = gr.themes.Soft(
+        primary_hue="emerald",
+        secondary_hue="sky",
+        neutral_hue="zinc"
+    )
+    css = """.bubble-wrap.svelte-kpz1
+        { 
+          background: url(https://i.pinimg.com/736x/6a/70/3a/6a703a8f55e50523d98cd1ac88dba19a.jpg);
+          background-position: center;
+          background-size: cover
+        } """
+    return theme, css
+
 if __name__ == "__main__":
     demo = create_chatbot()
-    demo.launch()
+    theme, css = get_style()
+    demo.launch(theme=theme, css=css)
